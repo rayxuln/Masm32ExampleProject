@@ -64,6 +64,420 @@ StrLen proc uses ebx ecx edx edi esi theStr
     ret
 StrLen endp
 
+; ;无符号整数转单精度浮点数
+; UintToFloat proc uses ebx ecx edx edi esi x
+;     local res, cnt, zeroMask, bitNum, e
+;     mov res, 0
+;     mov cnt, 0
+;     mov zeroMask, 80000000h
+;     mov bitNum, 32
+;     mov e, 0
+
+;     mov ebx, x
+;     cmp ebx, 0
+;     jnz not_zeor_int
+;         mov eax, 0
+;         ret
+;     not_zeor_int:
+;     ;统计左边0的个数
+;     @@:
+;     mov ebx, x
+;     mov ecx, zeroMask
+;     and ebx, ecx
+;     cmp ebx, 0
+;     jnz @F
+
+;     shr ecx, 1
+;     mov zeroMask, ecx
+
+;     mov ebx, cnt
+;     inc ebx
+;     mov cnt, ebx
+
+;     jmp @B
+;     @@:
+
+;     ;计算阶数
+;     mov ebx, bitNum
+;     dec ebx
+;     mov ecx, cnt
+;     sub ebx, ecx
+
+;     ;求阶数移码
+;     mov ecx, 127
+;     add ebx, ecx
+;     mov e, ebx
+
+;     ;合并最终结果
+;     mov eax, 0;写入符号位
+;     mov ecx, 23;写入阶数
+;     mov ebx, e
+;     shl ebx, cl
+;     mov ecx, 7f800000h
+;     and ebx, ecx
+;     or eax, ebx
+;     mov ebx, x;写入尾数
+;     mov ecx, cnt
+;     inc ecx
+;     sub ecx, 9
+;     shl ebx, cl
+;     mov ecx, 007fffffh
+;     and ebx, ecx
+;     or eax, ebx
+
+;     ret
+; UintToFloat endp
+
+; ;有符号整数补码转单精度浮点数
+; IntToFloat proc uses ebx ecx edx edi esi x
+;     local res, cnt, zeroMask, bitNum, e, sign
+;     mov res, 0
+;     mov cnt, 0
+;     mov zeroMask, 40000000h
+;     mov bitNum, 31
+;     mov e, 0
+;     mov sign, 0
+
+;     mov ebx, x
+;     cmp ebx, 0
+;     jnz not_zeor_int
+;         mov eax, 0
+;         ret
+;     not_zeor_int:
+
+;     ;将x转换成原码
+;     mov ebx, x
+;     mov ecx, 80000000h
+;     and ebx, ecx
+;     cmp ebx, 0
+;     jz @F;若符号位为0则无需转换
+;     mov ebx, x
+;     dec ebx
+;     not ebx
+;     mov x, ebx
+;     mov sign, 80000000h
+;     @@:
+
+;     ;统计左边0的个数
+;     @@:
+;     mov ebx, x
+;     mov ecx, zeroMask
+;     and ebx, ecx
+;     cmp ebx, 0
+;     jnz @F
+
+;     shr ecx, 1
+;     mov zeroMask, ecx
+
+;     mov ebx, cnt
+;     inc ebx
+;     mov cnt, ebx
+
+;     jmp @B
+;     @@:
+
+;     ;计算阶数
+;     mov ebx, bitNum
+;     dec ebx
+;     mov ecx, cnt
+;     sub ebx, ecx
+
+;     ;求阶数移码
+;     mov ecx, 127
+;     add ebx, ecx
+;     mov e, ebx
+
+;     ;合并最终结果
+;     mov eax, sign;写入符号位
+;     mov ecx, 23;写入阶数
+;     mov ebx, e
+;     shl ebx, cl
+;     mov ecx, 7f800000h
+;     and ebx, ecx
+;     or eax, ebx
+;     mov ebx, x;写入尾数
+;     mov ecx, cnt
+;     inc ecx
+;     sub ecx, 8
+;     shl ebx, cl
+;     mov ecx, 007fffffh
+;     and ebx, ecx
+;     or eax, ebx
+
+;     ret
+; IntToFloat endp
+
+;单精度浮点数转十进制小数字符串，指定保留位数为saveNum
+FloatToStr proc uses ebx ecx edx edi esi x, theStr, saveNum
+    local e, sign, eSign, i, decNum, pos, m, tempInt, numMask
+    ;若为0的话则直接置零即可
+    mov ebx, x
+    cmp ebx, 0
+    jnz not_zero_float
+        mov ebx, theStr
+
+        mov ecx, 0
+        mov eax, 30h
+        mov [ebx][ecx], eax
+
+        mov ecx, 1
+        mov eax, 0
+        mov [ebx][ecx], eax
+
+        ret
+    not_zero_float:
+
+    ;取符号
+    mov ebx, x
+    mov ecx, 80000000h
+    and ebx, ecx
+    mov sign, ebx
+
+    ;取阶数
+    mov ebx, x
+    mov ecx, 7f800000h
+    and ebx, ecx
+    mov ecx, 23
+    shr ebx, cl
+    mov e, ebx
+
+    ;将阶数移码转为补码
+    mov ebx, e
+    mov ecx, 127
+    sub ebx, ecx;得到补码
+    mov e, ebx
+    mov ecx, 80h
+    and ebx, ecx;取阶数的符号位
+    mov eSign, ebx
+    ;将补码转原码
+    cmp ebx, 0
+    jz @F;若为正数则不需要转换
+    mov ebx, e
+    dec ebx
+    not ebx
+    mov e, ebx
+    @@:
+
+    ;取尾数
+    mov ebx, x
+    mov ecx, 007fffffh
+    and ebx, ecx
+    mov ecx, 00800000h
+    or ebx, ecx
+    mov m, ebx
+
+    ;放入符号0
+    mov ebx, 0
+    push ebx
+
+    ;判断是否需要保留小数
+    mov ebx, saveNum
+    cmp ebx, 0
+    jz no_dec;保留0位小数则直接跳到整数转换
+    ;将尾数的小数部分转换成字符串
+    mov decNum, 5
+    ;按照保留小数位数拓展decNum
+    mov i, 1
+    @@:
+        mov ebx, i
+        mov ecx, saveNum
+        cmp ebx, ecx
+        jz @F
+        mov ecx, 10
+        mov edx, 0
+        mov eax, decNum
+        mul ecx
+        mov decNum, eax
+
+        mov ebx, i
+        inc ebx
+        mov i, ebx
+        jmp @B
+    @@:
+
+    ;计算小数点的位置
+    mov ecx, 22
+    mov ebx, e
+    mov edx, eSign
+    cmp edx, 0
+    jnz neg_e
+        sub ecx, ebx
+        jmp end_neg_e
+    neg_e:
+        add ecx, ebx
+    end_neg_e:
+    mov pos, ecx
+
+    ;若小数点的位置为负数则说明无小数部分，直接补0
+    cmp ecx, 0
+    jg has_dec
+    mov i, 0
+    @@:
+        mov ebx, i
+        mov edx, saveNum
+        cmp ebx, edx
+        jz @F
+
+        mov ebx, 30h
+        push ebx
+
+        mov ebx, i
+        inc ebx
+        mov i, ebx
+        jmp @B
+    @@:
+    jmp has_no_dec
+    has_dec:
+
+    ;小数转整数
+    mov tempInt, 0
+
+    mov ecx, pos
+    mov i, ecx
+
+    @@:
+        mov ebx, i
+        cmp ebx, 0
+        jl @F
+
+        mov ebx, 1
+        mov ecx, i
+        shl ebx, cl
+        mov eax, m
+        and eax, ebx
+        cmp eax, 0
+        jz zero_bit
+        
+        mov ebx, tempInt
+        mov ecx, decNum
+        add ebx, ecx
+        mov tempInt, ebx
+        zero_bit:
+
+        mov ebx, decNum
+        shr ebx, 1
+        mov decNum, ebx
+
+        mov ebx, i
+        dec ebx
+        mov i, ebx
+        jmp @B
+    @@:
+
+    mov eax, tempInt
+
+    ;整数转字符串
+    mov i, 0
+    @@:
+        mov ebx, i
+        mov ecx, saveNum
+        cmp ebx, ecx
+        jz @F
+
+        mov edx, 0
+        mov eax, tempInt
+        mov ecx, 10
+        div ecx
+
+        add edx, 30h
+        push edx
+
+        mov tempInt, eax
+
+        mov ebx, i
+        inc ebx
+        mov i, ebx
+        jmp @B
+    @@:
+
+    has_no_dec:
+    ;添加小数点
+    mov ebx, 2eh
+    push ebx
+
+    no_dec:
+
+    ;将尾数的整数部分转换成字符串
+    mov tempInt, 0
+    mov ebx, pos
+    mov i, ebx
+    @@:;将整数部分取出
+        mov ecx, i
+        cmp ecx, 23
+        jge @F
+
+        mov ebx, 1
+        shl ebx, cl
+        mov ecx, m
+        and ecx, ebx
+        mov ebx, tempInt
+        or ebx, ecx
+        mov tempInt, ebx
+
+        mov ebx, i
+        inc ebx
+        mov i, ebx
+        jmp @B
+    @@:
+    ;将小数部分抛弃
+    mov ecx, pos
+    inc ecx
+    mov ebx, tempInt
+    or ebx, 00800000h
+    shr ebx, cl
+    mov tempInt, ebx
+
+    ;若为0则直接打印一个0
+    cmp ebx, 0
+    jz zero_int
+    ;将整数转换成字符串
+    @@:
+        mov ebx, tempInt
+        cmp ebx, 0
+        jz @F
+
+        mov edx, 0
+        mov eax, ebx
+        mov ecx, 10
+        div ecx
+
+        add edx, 30h
+        push edx
+        mov tempInt, eax
+
+        jmp @B
+    @@:
+    jmp complet_int
+    zero_int:
+    mov ebx, 30h
+    push ebx
+    complet_int:
+
+    ;添加负号
+    mov ebx, sign
+    cmp ebx, 0
+    jz no_neg_sign
+    mov ebx, 2dh
+    push ebx
+    no_neg_sign:
+
+    mov i, 0
+    @@:;将栈中的字符装入字符串中
+        mov ecx, i
+        mov ebx, theStr
+        pop eax
+        mov [ebx][ecx], al
+        cmp eax, 0
+        jz @F
+
+        inc ecx
+        mov i, ecx
+        jmp @B
+    @@:
+
+    ret
+FloatToStr endp
+
 ;传入一个整数和一个字符串首地址，需提前申请好足够大的内存空间
 ;转化成十进制数字字符串
 IntToStr proc uses ebx ecx edx edi esi theInt, theStr
@@ -236,9 +650,9 @@ GetLevelByScore proc uses ebx ecx edi esi, score
     ret
 GetLevelByScore endp
 
-;计算给定等级所占总分数的百分比（整数）
+;计算给定等级所占总分数的百分比（浮点数）
 CalcScoreByLevel proc uses ebx ecx edi esi, hWnd, level
-    local sum, levelSum, num, i
+    local sum, levelSum, num, i, res
     ;初始化
     mov sum, 0
     mov levelSum, 0
@@ -286,8 +700,14 @@ CalcScoreByLevel proc uses ebx ecx edi esi, hWnd, level
     mov eax, levelSum
     mov ecx, 100
     mul ecx; levelSum *= 100
-    mov ebx, sum
-    div ebx; result = levelSum / sum
+    mov levelSum, eax
+    ; mov ebx, sum
+    ; div ebx; result = levelSum / sum
+    fild levelSum
+    fild sum
+    fdiv
+    fstp res
+    mov eax, res
 
     ret
 CalcScoreByLevel endp
@@ -343,7 +763,7 @@ OnAddButtonClicked proc uses ebx ecx edi esi, hWnd
     invoke    ConcatStr, addr info2, addr info3, addr strRes
     invoke    CalcScoreByLevel, hWnd, 1;计算A
     mov       ebx, eax
-    invoke    IntToStr, ebx, addr strA
+    invoke    FloatToStr, ebx, addr strA, 2
     invoke    ConcatStr, addr strRes, addr strA, addr strRes
     invoke    ConcatStr, addr strRes, addr percentStr, addr strRes
 
@@ -351,7 +771,7 @@ OnAddButtonClicked proc uses ebx ecx edi esi, hWnd
     invoke    ConcatStr, addr strRes, addr info4, addr strRes
     invoke    CalcScoreByLevel, hWnd, 2;计算B
     mov       ebx, eax
-    invoke    IntToStr, ebx, addr strA
+    invoke    FloatToStr, ebx, addr strA, 2
     invoke    ConcatStr, addr strRes, addr strA, addr strRes
     invoke    ConcatStr, addr strRes, addr percentStr, addr strRes
 
@@ -359,7 +779,7 @@ OnAddButtonClicked proc uses ebx ecx edi esi, hWnd
     invoke    ConcatStr, addr strRes, addr info5, addr strRes
     invoke    CalcScoreByLevel, hWnd, 3;计算C
     mov       ebx, eax
-    invoke    IntToStr, ebx, addr strA
+    invoke    FloatToStr, ebx, addr strA, 2
     invoke    ConcatStr, addr strRes, addr strA, addr strRes
     invoke    ConcatStr, addr strRes, addr percentStr, addr strRes
 
@@ -367,7 +787,7 @@ OnAddButtonClicked proc uses ebx ecx edi esi, hWnd
     invoke    ConcatStr, addr strRes, addr info6, addr strRes
     invoke    CalcScoreByLevel, hWnd, 4;计算D
     mov       ebx, eax
-    invoke    IntToStr, ebx, addr strA
+    invoke    FloatToStr, ebx, addr strA, 2
     invoke    ConcatStr, addr strRes, addr strA, addr strRes
     invoke    ConcatStr, addr strRes, addr percentStr, addr strRes
 
@@ -378,7 +798,7 @@ OnAddButtonClicked endp
 
 ;消息处理
 ProcDlg proc uses ebx ecx edi esi hWnd, wMsg, wParam, lParam
-    local strRes[2048]:byte
+    local strRes[2048]:byte, theReal
     mov    eax, wMsg
     .if eax == WM_CLOSE
         invoke    EndDialog, hWnd, NULL
@@ -407,6 +827,18 @@ ProcDlg proc uses ebx ecx edi esi hWnd, wMsg, wParam, lParam
                 mov strRes[0], 0
                 invoke SetWindowText, hTextEditor, addr strRes
                 invoke SendDlgItemMessage, hWnd, SCORE_LIST_BOX_ID, LB_RESETCONTENT, 0, 0
+
+                ;测试浮点数
+                mov theReal, 9000
+                fild theReal
+                mov theReal, 341
+                fild theReal
+                fdiv
+                fstp theReal
+                mov ebx, theReal
+
+                invoke FloatToStr, theReal, addr strRes, 2
+                invoke MessageBox, hWnd, addr strRes, addr massageBoxTitle, MB_OK
         .endif
     .else
         mov    eax, FALSE
