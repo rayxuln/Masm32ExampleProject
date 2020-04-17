@@ -828,17 +828,17 @@ ProcDlg proc uses ebx ecx edi esi hWnd, wMsg, wParam, lParam
                 invoke SetWindowText, hTextEditor, addr strRes
                 invoke SendDlgItemMessage, hWnd, SCORE_LIST_BOX_ID, LB_RESETCONTENT, 0, 0
 
-                ;测试浮点数
-                mov theReal, 9000
-                fild theReal
-                mov theReal, 341
-                fild theReal
-                fdiv
-                fstp theReal
-                mov ebx, theReal
+                ; ;测试浮点数
+                ; mov theReal, 100
+                ; fild theReal
+                ; mov theReal, 1
+                ; fild theReal
+                ; fdiv
+                ; fstp theReal
+                ; mov ebx, theReal
 
-                invoke FloatToStr, theReal, addr strRes, 2
-                invoke MessageBox, hWnd, addr strRes, addr massageBoxTitle, MB_OK
+                ; invoke FloatToStr, theReal, addr strRes, 2
+                ; invoke MessageBox, hWnd, addr strRes, addr massageBoxTitle, MB_OK
         .endif
     .else
         mov    eax, FALSE
